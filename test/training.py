@@ -2,53 +2,60 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-class FtLinearRegression:
-    def __init__(self, file_csv: str, learning_rate: float, iter_number: int):
-        self.__grads = np.array([0.0, 0.0])
-        self.__data_tab = np.genfromtxt(file_csv, delimiter=",", skip_header=1)
-        self.learning_rate = learning_rate
-        self.iter_number = iter_number
-        self.x = self.__data_tab[:, 0]
+class Dataset:
+    def __init__(self, file_csv: str):
+        self.data_tab = np.genfromtxt(file_csv, delimiter=",", skip_header=1)
+        self.x = self.data_tab[:, 0]
         self.x_mean = np.mean(self.x)
         self.x_std = np.std(self.x)
-        self.y = self.__data_tab[:, 1]
+        self.y = self.data_tab[:, 1]
         self.m = len(self.x)
-        self.tetha = np.array([0.0, 0.0])
-        self.tethas = []
-        self.costs = []
+
+
+class FtLinearRegression:
+    def __init__(self, file_csv: str, learning_rate: float, iter_number: int):
+        self.__datas = Dataset(file_csv)
+        self.__grads = np.array([0.0, 0.0])
+        self.__learnnning_rate = learning_rate
+        self.__iter_number = iter_number
+        self.__tetha = np.array([0.0, 0.0])
+        self.__tethas = []
+        self.__costs = []
 
     def model(self, x=None):
         if x is None:
-            x = self.x
-        return x * self.tetha[0] + self.tetha[1]
+            x = self.__datas.x
+        return x * self.__tetha[0] + self.__tetha[1]
 
     def __cost(self, x):
-        error = self.model(x) - self.y
+        error = self.model(x) - self.__datas.y
         loss = (error**2).sum()
-        self.costs.append(loss / (2 * self.m))
+        self.__costs.append(loss / (2 * self.__datas.m))
 
     def __gradients(self, x):
-        error = self.model(x) - self.y
-        self.__grads[0] = (error * x).sum() / self.m
-        self.__grads[1] = error.sum() / self.m
+        error = self.model(x) - self.__datas.y
+        self.__grads[0] = (error * x).sum() / self.__datas.m
+        self.__grads[1] = error.sum() / self.__datas.m
 
     def __gradient_descent(self, x):
-        for _ in range(self.iter_number):
+        for _ in range(self.__iter_number):
             self.__gradients(x)
-            self.tetha = self.tetha - self.learning_rate * self.__grads
-            self.tethas.append(self.tetha)
+            self.__tetha = self.__tetha - self.__learnnning_rate * self.__grads
+            self.__tethas.append(self.__tetha)
             self.__cost(x)
 
     def get_result(self):
-        return self.x, self.y, self.tetha, self.tethas, self.costs
+        return self.__datas.x, self.__datas.y, self.__tetha, self.__tethas, self.__costs
 
     def standardisation(self):
-        return (self.x - self.x_mean) / self.x_std
+        return (self.__datas.x - self.__datas.x_mean) / self.__datas.x_std
 
     def destandardisation(self):
-        tetha0 = self.tetha[0] / self.x_std
-        tetha1 = self.tetha[1] - (self.tetha[0] * self.x_mean / self.x_std)
-        self.tetha = np.array([tetha0, tetha1])
+        tetha0 = self.__tetha[0] / self.__datas.x_std
+        tetha1 = self.__tetha[1] - (
+            self.__tetha[0] * self.__datas.x_mean / self.__datas.x_std
+        )
+        self.__tetha = np.array([tetha0, tetha1])
 
     def train(self):
         x_std = self.standardisation()
