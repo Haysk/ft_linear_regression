@@ -1,97 +1,115 @@
-# coding:utf-8
-
-import matplotlib.pyplot as plt
-import csv
 import numpy as np
-from sklearn.metrics import mean_squared_error
-import myLinearRegression as myLR
-from myLinearRegression import MyLinearRegression as MyLR
-from math import sqrt
+import matplotlib.pyplot as plt
 
-def normalize(list) ->list:
-    out = list.copy()
-    min_value = min(list)
-    out -= min_value
-    max_value = max(list)
-    out /= (max_value - min_value)
-    return out
 
-def denormalize(thetas, XKM, YPrice) :
-    
-    min_km = min(XKM)
-    max_km = max(XKM)
-    min_price = min(YPrice)
-    max_price = max(YPrice)
-    delta = np.array([max_km - min_km, max_price - min_price])
-    thetas[1] = thetas[1] * delta[1] / delta[0]
-    thetas[0] = thetas[0] * delta[1] + min(YPrice) - thetas[1] * min(XKM)
-    return thetas
+class Dataset:
+    def __init__(self, file_csv: str):
+        if file_csv == "":
+            self.data_tab = None
+        else:
+            self.data_tab = np.genfromtxt(
+                file_csv, delimiter=",", skip_header=1, dtype=float
+            )
+            if np.isnan(self.data_tab).any():
+                print("Le fichier n'est pas un fichier csv valide")
+                raise ValueError
+            self.x = self.data_tab[:, 0]
+            self.x_mean = np.mean(self.x)
+            self.x_std = np.std(self.x)
+            self.y = self.data_tab[:, 1]
+            self.m = len(self.x)
 
-def average(list) ->float:
-    sumNum = 0
-    for i in list:
-        sumNum = sumNum + i
-    avg = sumNum / len(list)
-    return avg
+class FtLinearRegression:
+    def __init__(self, file_csv: str = ""):
+        self.__datas = Dataset(file_csv)
+        self.__grads = np.array([0.0, 0.0])
+        self.__tetha = np.array([0.0, 0.0])
+        self.__tethas = []
+        self.__costs = []
 
-def deviation(i, average) ->float:
-    return i - average
+    def __cost(self, x):
+        error = self.model(x) - self.__datas.y
+        loss = (error**2).sum()
+        self.__costs.append(loss / (2 * self.__datas.m))
 
-def main() -> int:
+    def __gradients(self, x):
+        error = self.model(x) - self.__datas.y
+        self.__grads[0] = (error * x).sum() / self.__datas.m
+        self.__grads[1] = error.sum() / self.__datas.m
 
-    with open('data.csv', newline='') as file:
-        csv_reader = csv.reader(file)
-        next(csv_reader)
-        columnValueKm = []
-        columnValuePrice = []
-        for row in csv_reader:
-            x, y = map(float, row)
-            columnValueKm.append(x)
-            columnValuePrice.append(y)
-    XKm = np.array([columnValueKm]).reshape(-1,1)
-    YPrice = np.array([columnValuePrice]).reshape(-1,1)
-    linear_model = MyLR(np.array([[-0.0], [0.0]]))
-    Y_model = linear_model.predict_(XKm)
-    myLR.mse_(YPrice, Y_model)
-    mean_squared_error(YPrice, Y_model)
+    def __gradient_descent(self, x, learning_rate, iter_number):
+        for _ in range(iter_number):
+            self.__gradients(x)
+            tetha = self.__tetha - learning_rate * self.__grads
+            self.__tetha = tetha
+            self.__tethas.append(self.__tetha)
+            self.__cost(x)
 
-    #Get the lost
-    lost = myLR.loss_(YPrice, Y_model)
+    def __standardisation(self):
+        return (self.__datas.x - self.__datas.x_mean) / self.__datas.x_std
 
-    #Get Theta
-    x_normalize = normalize(XKm)
-    y_normalize = normalize(YPrice)
-    theta = linear_model.fit_(x_normalize, y_normalize)
-    theta = denormalize(theta, XKm, YPrice)
-    y_loss = linear_model.predict_(XKm)
-    plt.plot(XKm, y_loss)
-    plt.scatter(XKm, YPrice)
-    # plt.colorbar()
+    def __destandardisation(self):
+        tetha0 = self.__tetha[0] / self.__datas.x_std
+        tetha1 = self.__tetha[1] - (
+            self.__tetha[0] * self.__datas.x_mean / self.__datas.x_std
+        )
+        self.__tetha = np.array([tetha0, tetha1])
 
-    #Sizing for better look
-    xtickValue = [20000, 40000, 60000, 80000, 100000, 120000, 140000, 160000,
-                  180000, 200000, 220000, 240000, 260000, 280000]
-    xtickLab = ['20k', '40k', '60k', '80k', '100k', '120k', '140k', '160k',
-                '180k', '200k', '220k', '240k', '260k', '280k']
-    yTickValue = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
-    yTickLab = ['1K', '2K', '3K', '4K', '5K', '6K', '7K', '8K', '9K', '10K']
+    def model(self, x=None):
+        if x is None:
+            if self.__datas.data_tab is None:
+                return 0
+            x = self.__datas.x
+        return x * self.__tetha[0] + self.__tetha[1]
 
-    #Label
-    plt.xlabel('Number of KM')
-    plt.ylabel('Price in K euros')
-    plt.title('Price for a car depending on the KM')
-    plt.xticks(xtickValue, xtickLab)
-    plt.yticks(yTickValue, yTickLab)
+    def set_tetha(self, tetha):
+        self.__tetha = tetha
 
-    #Write Theta in CSV
-    with open('predict.csv', 'w', newline='') as file:
-        write = csv.writer(file)
-        write.writerows(theta)
+    def save_tetha(self, file_name):
+        np.savetxt(file_name, self.__tetha, delimiter=",")
 
-    #Show
-    plt.show()
+    def train(self, learning_rate, iter_number):
+        if self.__datas.data_tab is None:
+            raise Exception("No DataSet")
+        x_std = self.__standardisation()
+        self.__gradient_descent(x_std, learning_rate, iter_number)
+        self.__destandardisation()
+
+    def display(self, x_label, y_label):
+        if self.__datas.data_tab is None:
+            raise Exception("No DataSet")
+        figure = plt.figure(figsize=(6, 4))
+        figure.set_figwidth(15)
+        figure.set_figheight(15)
+        ax0 = figure.add_subplot(2, 1, 1)
+        ax0.plot(self.__datas.x, self.__datas.y, "o")
+        ax0.plot(self.__datas.x, self.model())
+        ax0.set_xlabel(x_label)
+        ax0.set_ylabel(y_label)
+        ax0.set_title("Regression Lineaire")
+
+        ax1 = figure.add_subplot(2, 2, 3)
+        ax1.plot(self.__tethas)
+        ax1.set_title("evolution des tethas")
+
+        ax2 = figure.add_subplot(2, 2, 4)
+        ax2.plot(self.__costs)
+        ax2.set_title("evolution du cout")
+        plt.show()
+
+
+def main():
+    try:
+        linear_regression = FtLinearRegression("data.csv")
+        linear_regression.train(0.005, 1500)
+        linear_regression.display("Km des voitures", "Prix des voitures")
+        linear_regression.save_tetha("tetha.csv")
+    except FileNotFoundError as e:
+        print(f"le fichier {str(e)[:-11]} n'existe pas")
+    except Exception as e:
+        print(e)
     return 0
 
 
 if __name__ == "__main__":
-    SystemExit(main())
+    main()
